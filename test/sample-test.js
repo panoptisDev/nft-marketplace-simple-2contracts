@@ -1,19 +1,51 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-describe("Greeter", function () {
-  it("Should return the new greeting once it's changed", async function () {
-    const Greeter = await ethers.getContractFactory("Greeter");
-    const greeter = await Greeter.deploy("Hello, world!");
-    await greeter.deployed();
+describe("NFTMarket", function () {
+  it("Should create and execute market sales", async function () {
+    const Market = await ethers.getContractFactory("NFTMarket");
+    const market = await Market.deploy();
+    await market.deployed();
 
-    expect(await greeter.greet()).to.equal("Hello, world!");
+    const marketAddress = market.address;
 
-    const setGreetingTx = await greeter.setGreeting("Hola, mundo!");
+    const NFT = await ethers.getContractFactory("NFT");
+    const nft = await NFT.deploy(marketAddress);
+    await nft.deployed();
 
-    // wait until the transaction is mined
-    await setGreetingTx.wait();
+    const nftContractAddress = nft.address;
 
-    expect(await greeter.greet()).to.equal("Hola, mundo!");
+    let listingPrice = await market.getListingPrice();
+    listingPrice = listingPrice.toString();
+
+    const auctionPrice = ethers.utils.parseUnits('100', 'ether');
+
+    await nft.createToken('https://www.mytokenlocation.com');
+    await nft.createToken('https://www.mytokenlocation2.com');
+
+    await market.createMarketItem(nftContractAddress, 1, auctionPrice, { value: listingPrice });
+    await market.createMarketItem(nftContractAddress, 2, auctionPrice, { value: listingPrice });
+
+    const [_, buyerAddress] = await ethers.getSigners();
+
+    await market.connect(buyerAddress).createMarketSale(nftContractAddress, 1, { value: auctionPrice });
+
+    let items = await market.fetchMarketItems();
+
+    items = await Promise.all(items.map(async ({tokenId,price,seller,owner}) => {
+      const tokenUri = await nft.tokenURI(tokenId);
+      let item = {
+        price: price.toString(),
+        tokenId: tokenId.toString(),
+        seller,
+        owner,
+        tokenUri
+      }
+
+      return item
+    }))
+
+    console.log('items', items);
+
   });
 });
